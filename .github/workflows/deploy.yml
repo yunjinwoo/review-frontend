@@ -20,15 +20,15 @@ jobs:
           port: 22                             # iwinv 기본 SSH 포트
           script: |
             # 1. 프로젝트 폴더로 이동 (폴더 이름은 서버 환경에 맞게 수정해주세요)
-            mkdir -p ~/reviewApp
-            cd ~/reviewApp
+            mkdir -p ~/reviewApp-frontend
+            cd ~/reviewApp-frontend
             
             # 2. 소스 코드 업데이트 (강제 업데이트 방식)
             git fetch --all
             git reset --hard origin/main
             
             # 3. 프론트엔드 디렉토리로 이동
-            cd frontend
+            cd review-frontend
             
             # 4. 의존성 설치 및 프로덕션 빌드 (dist 폴더 생성)
             npm install
