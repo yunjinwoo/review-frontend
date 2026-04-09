@@ -71,6 +71,9 @@ const getFilesFromEntry = async (entry: any, path: string, resultContext: { file
   }
 };
 
+// 백엔드 API 주소 설정 (환경변수에 따라 로컬/리모트 자동 분기)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:5050' : 'http://49.247.202.50:5050');
+
 function App() {
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('javascript');
@@ -81,7 +84,7 @@ function App() {
 
   const loadHistory = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/reviews');
+      const res = await fetch(`${API_BASE_URL}/api/reviews`);
       const data = await res.json();
       if (data.success) {
         setHistory(data.reviews);
@@ -154,7 +157,7 @@ function App() {
     setReview('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/review', {
+      const response = await fetch(`${API_BASE_URL}/api/review`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -190,7 +193,7 @@ function App() {
     setIsLoading(true);
     
     try {
-      const res = await fetch(`http://localhost:5000/api/reviews/${id}`);
+      const res = await fetch(`${API_BASE_URL}/api/reviews/${id}`);
       const data = await res.json();
       
       if (data.success && data.review) {

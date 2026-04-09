@@ -39,7 +39,7 @@ jobs:
             pm2 delete frontend-app || true
             
             # 빌드된 dist 폴더를 SPA(Single Page Application) 모드로 포트 3000번에서 서비스
-            pm2 serve dist 3000 --name frontend-app --spa
+            pm2 start npx --name "frontend-app" -- serve -s dist -l 3000
             
             # 6. 설정 저장 (서버 재부팅 시 자동 실행)
             pm2 save
