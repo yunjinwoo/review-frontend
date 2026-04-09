@@ -1,0 +1,48 @@
+name: Deploy Frontend to iwinv
+
+on:
+  push:
+    branches: [ main ] # 메인 브랜치에 푸시될 때 실행됩니다.
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_IP }}        # GitHub Secrets에 등록한 서버 IP
+          username: ${{ secrets.SERVER_USER }}  # GitHub Secrets에 등록한 서버 계정 (예: ubuntu)
+          key: ${{ secrets.SSH_PRIVATE_KEY }}    # GitHub Secrets에 등록한 비밀키
+          port: 22                             # iwinv 기본 SSH 포트
+          script: |
+            # 1. 프로젝트 폴더로 이동 (폴더 이름은 서버 환경에 맞게 수정해주세요)
+            mkdir -p ~/reviewApp
+            cd ~/reviewApp
+            
+            # 2. 소스 코드 업데이트 (강제 업데이트 방식)
+            git fetch --all
+            git reset --hard origin/main
+            
+            # 3. 프론트엔드 디렉토리로 이동
+            cd frontend
+            
+            # 4. 의존성 설치 및 프로덕션 빌드 (dist 폴더 생성)
+            npm install
+            npm run build
+            
+            # 5. PM2를 이용한 정적 파일(dist) 구동
+            # 기존 프로세스가 있다면 중지 후 삭제 (확실한 재시작을 위해)
+            pm2 delete frontend-app || true
+            
+            # 빌드된 dist 폴더를 SPA(Single Page Application) 모드로 포트 3000번에서 서비스
+            pm2 serve dist 3000 --name frontend-app --spa
+            
+            # 6. 설정 저장 (서버 재부팅 시 자동 실행)
+            pm2 save
+            
+            # 7. 상태 확인
+            pm2 list
