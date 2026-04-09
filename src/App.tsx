@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 interface FileData {
   path: string;
   content: string;
+}
+
+interface ReviewHistoryItem {
+  id: number;
+  language: string;
+  createdAt: string;
 }
 
 // 재귀적으로 파일과 폴더를 탐색하여 파일을 읽어오는 함수
@@ -71,6 +77,23 @@ function App() {
   const [review, setReview] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [history, setHistory] = useState<ReviewHistoryItem[]>([]);
+
+  const loadHistory = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/reviews');
+      const data = await res.json();
+      if (data.success) {
+        setHistory(data.reviews);
+      }
+    } catch (e) {
+      console.error('기록을 불러오는 중 오류 발생:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
@@ -131,7 +154,6 @@ function App() {
     setReview('');
 
     try {
-      // Backend URL (for local testing port is 5000)
       const response = await fetch('http://localhost:5000/api/review', {
         method: 'POST',
         headers: {
@@ -143,21 +165,50 @@ function App() {
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.error || '리뷰 요청에 실패했습니다.');
+        // 서버에서 상세 에러 리뷰(마크다운 형태)를 보내줬다면 화면에 표시
+        if (data.review) {
+          setReview(data.review);
+        } else {
+          setReview(`오류 발생: ${data.error || '리뷰 요청에 실패했습니다.'}`);
+        }
+        // DB에 에러 내역이 잘 저장되었는지 다시 확인하기 위해 throw 에러 대신 그냥 에러 처리를 마침 (finally로 넘어감)
+        return; 
       }
       
       setReview(data.review);
     } catch (error: any) {
       console.error(error);
-      setReview(`오류 발생: ${error.message}`);
+      setReview(`네트워크 오류 발생: ${error.message}`);
+    } finally {
+      await loadHistory(); // 정상 응답이든 에러든, 서버가 DB에 에러 내역을 남겼을 수 있으므로 무조건 히스토리를 갱신합니다.
+      setIsLoading(false);
+    }
+  };
+
+  const loadReviewDetails = async (id: number) => {
+    if (isLoading) return;
+    setIsLoading(true);
+    
+    try {
+      const res = await fetch(`http://localhost:5000/api/reviews/${id}`);
+      const data = await res.json();
+      
+      if (data.success && data.review) {
+        setCode(data.review.originalCode);
+        setLanguage(data.review.language || 'javascript');
+        setReview(data.review.botReview);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('해당 리뷰의 상세 내역을 불러오는데 실패했습니다.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-slate-50 flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl w-full space-y-8">
+    <div className="min-h-screen bg-[#0f172a] text-slate-50 flex flex-col items-center py-6 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[1500px] w-full space-y-8">
         
         {/* Header Section */}
         <div className="text-center">
@@ -169,12 +220,39 @@ function App() {
           </p>
         </div>
 
-        {/* Main Content: Split View for Code Input and Review Output */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Main Content: 3-column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {/* Left Panel: Code Input */}
+          {/* Left Panel: Review History (Col 1-2) */}
+          <div className="lg:col-span-2 bg-slate-800 border-2 border-slate-700 shadow-2xl rounded-2xl p-4 flex flex-col space-y-4 h-[800px] transition-all duration-300">
+             <h2 className="text-lg font-semibold text-slate-200 border-b border-slate-700 pb-2">히스토리</h2>
+             <div className="flex-grow overflow-y-auto space-y-2 pr-2">
+               {history.length === 0 ? (
+                 <p className="text-xs text-slate-500 text-center mt-4">저장된 리뷰가 없습니다.</p>
+               ) : (
+                 history.map((item) => (
+                   <button
+                     key={item.id}
+                     onClick={() => loadReviewDetails(item.id)}
+                     className="w-full text-left p-3 rounded-xl border border-slate-700 bg-slate-900/50 hover:bg-slate-700 hover:border-slate-500 transition-all group"
+                   >
+                     <div className="flex justify-between items-center mb-1">
+                       <span className="text-blue-400 font-bold text-xs uppercase group-hover:text-blue-300">
+                         {item.language}
+                       </span>
+                     </div>
+                     <div className="text-[10px] text-slate-400 group-hover:text-slate-300">
+                       {new Date(item.createdAt).toLocaleString()}
+                     </div>
+                   </button>
+                 ))
+               )}
+             </div>
+          </div>
+
+          {/* Center Panel: Code Input (Col 3-7) */}
           <div 
-            className={`bg-slate-800 border-2 shadow-2xl rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 relative ${
+            className={`lg:col-span-5 bg-slate-800 border-2 shadow-2xl rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 relative h-[800px] ${
               isDragging ? 'border-blue-500 border-dashed bg-slate-800/80 scale-[1.02]' : 'border-slate-700 hover:border-slate-600'
             }`}
             onDragOver={handleDragOver}
@@ -195,22 +273,30 @@ function App() {
 
             <div className="flex justify-between items-center relative z-0">
               <h2 className="text-xl font-semibold text-slate-200">코드 입력</h2>
-              <select
-                className="bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 transition-colors cursor-pointer"
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-              >
-                <option value="javascript">JavaScript</option>
-                <option value="typescript">TypeScript</option>
-                <option value="python">Python</option>
-                <option value="php">PHP</option>
-                <option value="java">Java</option>
-                <option value="csharp">C#</option>
-              </select>
+              <div className="flex space-x-2">
+                <button 
+                  onClick={() => { setCode(''); setReview(''); }}
+                  className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-1 rounded transition-colors"
+                >
+                  초기화
+                </button>
+                <select
+                  className="bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 transition-colors cursor-pointer"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                >
+                  <option value="javascript">JavaScript</option>
+                  <option value="typescript">TypeScript</option>
+                  <option value="python">Python</option>
+                  <option value="php">PHP</option>
+                  <option value="java">Java</option>
+                  <option value="csharp">C#</option>
+                </select>
+              </div>
             </div>
             
             <textarea
-              className="flex-grow min-h-[400px] bg-slate-900 text-green-400 font-mono text-sm p-4 rounded-xl border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none transition-all placeholder:text-slate-600 shadow-inner relative z-0"
+              className="flex-grow bg-slate-900 text-green-400 font-mono text-sm p-4 rounded-xl border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none transition-all placeholder:text-slate-600 shadow-inner relative z-0"
               placeholder="코드를 붙여넣거나, 폴더/파일을 드래그해서 놓아주세요..."
               value={code}
               onChange={(e) => setCode(e.target.value)}
@@ -240,15 +326,16 @@ function App() {
             </button>
           </div>
 
-          {/* Right Panel: Review Output */}
-          <div className="bg-slate-800 border border-slate-700 shadow-2xl rounded-2xl p-6 flex flex-col space-y-4 transition-all duration-300 hover:border-slate-600">
-            <h2 className="text-xl font-semibold text-slate-200">리뷰 결과</h2>
-            <div className={`flex-grow border border-slate-700 rounded-xl p-4 overflow-y-auto ${!review ? 'bg-slate-900/50 flex items-center justify-center' : 'bg-slate-900'} shadow-inner`}>
+          {/* Right Panel: Review Output (Col 8-12) */}
+          <div className="lg:col-span-5 bg-slate-800 border-2 border-slate-700 shadow-2xl rounded-2xl p-6 flex flex-col space-y-4 h-[800px] transition-all duration-300 hover:border-slate-600">
+            <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+              <h2 className="text-xl font-semibold text-slate-200">리뷰 결과</h2>
+            </div>
+            <div className={`flex-grow border border-slate-700 rounded-xl p-6 overflow-y-auto ${!review ? 'bg-slate-900/50 flex items-center justify-center' : 'bg-slate-900'} shadow-inner`}>
               {!review && !isLoading ? (
                 <p className="text-slate-500 text-center">코드를 입력하고 리뷰를 요청하면<br/>이곳에 결과가 표시됩니다.</p>
               ) : (
                 <div className="prose prose-invert max-w-none text-slate-300 font-sans leading-relaxed pointer-events-auto">
-                  {/* For Markdown Support */}
                   <ReactMarkdown>
                     {review}
                   </ReactMarkdown>
