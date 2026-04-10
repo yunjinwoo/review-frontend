@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import FloatingNav from './components/FloatingNav';
 
 interface FileData {
   path: string;
@@ -211,6 +212,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-50 flex flex-col items-center py-6 px-4 sm:px-6 lg:px-8">
+      <FloatingNav />
       <div className="max-w-[1500px] w-full space-y-8">
         
         {/* Header Section */}
